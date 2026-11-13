@@ -1,0 +1,125 @@
+# Pipeline CI/CD SenAlert (mono-repo frontend + backend)
+#
+#   test    -> tests du backend (pytest) et du frontend (vitest)
+#   build   -> compilation Angular pour GitLab Pages
+#   docker  -> images Docker poussées dans le Container Registry GitLab
+#   deploy  -> GitLab Pages (automatique) + Docker Compose (manuel, runner perso)
+
+stages:
+  - test
+  - build
+  - docker
+  - deploy
+
+variables:
+  NODE_IMAGE: node:22-alpine
+  PYTHON_IMAGE: python:3.13-slim
+  DOCKER_VERSION: "27"
+
+# Cache npm partagé par les jobs frontend
+.frontend:
+  image: $NODE_IMAGE
+  before_script:
+    - cd frontend
+    - npm ci --cache .npm --prefer-offline
+  cache:
+    key:
+      files:
+        - frontend/package-lock.json
+    paths:
+      - frontend/.npm/
+
+# ---------------------------------------------------------------- test
+test-backend:
+  stage: test
+  image: $PYTHON_IMAGE
+  script:
+    - cd backend
+    - pip install --no-cache-dir -r requirements-dev.txt
+    - pytest -q
+
+test-frontend:
+  extends: .frontend
+  stage: test
+  script:
+    - npx ng test --watch=false
+
+# ---------------------------------------------------------------- build
+build-frontend:
+  extends: .frontend
+  stage: build
+  script:
+    # Le site Pages vit sous un sous-chemin (ex. /senalert/) ou à la racine
+    # d'un domaine unique : on le déduit de CI_PAGES_URL.
+    - BASE_HREF="$(echo "${CI_PAGES_URL:-}" | sed -E 's#^https?://[^/]+##; s#/$##')/"
+    - echo "base-href = $BASE_HREF"
+    - npx ng build --base-href "$BASE_HREF"
+  artifacts:
+    paths:
+      - frontend/dist/senalert/browser
+    expire_in: 1 week
+
+# ---------------------------------------------------------------- docker
+docker-images:
+  stage: docker
+  image: docker:$DOCKER_VERSION
+  services:
+    - docker:$DOCKER_VERSION-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+    REGISTRY_IMAGE: $CI_REGISTRY_IMAGE
+    IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - docker compose build backend-service frontend-service
+    - docker compose push backend-service frontend-service
+    # Tag « latest » en plus du SHA du commit
+    - |
+      for svc in backend frontend; do
+        docker tag "$REGISTRY_IMAGE/$svc:$IMAGE_TAG" "$REGISTRY_IMAGE/$svc:latest"
+        docker push "$REGISTRY_IMAGE/$svc:latest"
+      done
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ---------------------------------------------------------------- deploy
+# GitLab Pages : le job doit s'appeler « pages » et publier le dossier public/
+pages:
+  stage: deploy
+  image: alpine:3.22
+  needs: [build-frontend]
+  script:
+    - mv frontend/dist/senalert/browser public
+    # Routes Angular (/signaler, /admin...) : Pages sert 404.html si le fichier n'existe pas
+    - cp public/index.html public/404.html
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Déploiement complet (Postgres + API + frontend) avec Docker Compose,
+# comme le stage « Deploy with Docker Compose » du TP1 avec Jenkins.
+# Il tourne sur VOTRE runner (tag senalert-deploy), voir README.
+deploy-compose:
+  stage: deploy
+  image: docker:$DOCKER_VERSION
+  tags:
+    - senalert-deploy
+  needs: [docker-images]
+  variables:
+    REGISTRY_IMAGE: $CI_REGISTRY_IMAGE
+    IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker compose pull backend-service frontend-service
+    - docker compose up -d --no-build
+    - docker compose ps
+  environment:
+    name: local
+    url: http://localhost:3000
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true

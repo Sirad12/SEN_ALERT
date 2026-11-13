@@ -1,0 +1,77 @@
+services:
+
+  # -------------------------------
+  # PostgreSQL 17
+  # -------------------------------
+  db-service:
+    image: postgres:17
+    container_name: senalert-postgres
+    environment:
+      POSTGRES_DB: senalert
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    volumes:
+      - senalertdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d senalert"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # -------------------------------
+  # PGAdmin
+  # -------------------------------
+  pgadmin-service:
+    image: dpage/pgadmin4:latest
+    container_name: senalert-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@senalert.sn
+      PGADMIN_DEFAULT_PASSWORD: admin1234
+    ports:
+      - "8081:80"
+    depends_on:
+      db-service:
+        condition: service_healthy
+    restart: always
+
+  # -------------------------------
+  # Backend FastAPI
+  # -------------------------------
+  backend-service:
+    build: ./backend
+    # En CI, l'image est poussée dans le Container Registry GitLab
+    image: ${REGISTRY_IMAGE:-senalert}/backend:${IMAGE_TAG:-latest}
+    container_name: senalert-backend
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql://admin:admin123@db-service:5432/senalert
+      ADMIN_USER: admin
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-demo123}
+    depends_on:
+      db-service:
+        condition: service_healthy
+    restart: always
+
+  # -------------------------------
+  # Frontend Angular (nginx)
+  # -------------------------------
+  frontend-service:
+    build: ./frontend
+    image: ${REGISTRY_IMAGE:-senalert}/frontend:${IMAGE_TAG:-latest}
+    container_name: senalert-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend-service
+    restart: always
+
+# -------------------------------
+# Volume persistant
+# -------------------------------
+volumes:
+  senalertdata:

@@ -1,0 +1,11 @@
+# Backend Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.db
+
+# Artefacts locaux
+/public/
+.env
