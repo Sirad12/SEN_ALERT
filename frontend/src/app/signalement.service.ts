@@ -5,8 +5,8 @@ export type Statut = 'Signalé' | 'Vérifié' | 'En traitement' | 'Résolu' | 'R
 export const STATUTS: Statut[] = ['Signalé', 'Vérifié', 'En traitement', 'Résolu', 'Rejeté'];
 export const TYPES = ['Rue bouchée', 'Canal bouché', 'Caniveau bouché'];
 export const COULEURS: Record<Statut, string> = {
-  'Signalé': '#c4552d', 'Vérifié': '#b8860b', 'En traitement': '#2b5fa8',
-  'Résolu': '#3d7a4a', 'Rejeté': '#8a8577',
+  'Signalé': '#b42318', 'Vérifié': '#b54708', 'En traitement': '#175cd3',
+  'Résolu': '#067647', 'Rejeté': '#667085',
 };
 export const ZONES = [
   { n: 'Parcelles Assainies', x: 200, y: 80 }, { n: 'Guédiawaye', x: 360, y: 70 },

@@ -8,17 +8,17 @@ import { COULEURS, communeDe, SignalementService, Statut, STATUTS } from '../sig
   selector: 'app-admin',
   imports: [FormsModule, NgTemplateOutlet, DetailComponent],
   template: `
-    <div class="page">
-      @if (!svc.admin()) {
-        <div style="max-width:360px">
+    @if (!svc.admin()) {
+      <div class="connexion">
           <h1>Espace administrateur</h1>
           @if (erreur()) { <p class="err">{{ erreur() }}</p> }
           <label>Identifiant</label><input [(ngModel)]="u">
           <label>Mot de passe</label><input type="password" [(ngModel)]="p">
           <p><button class="main" (click)="connecter()">Se connecter</button></p>
           <p class="mut">Démonstration : admin / demo123 (compte fictif).</p>
-        </div>
-      } @else {
+      </div>
+    } @else {
+      <div class="page">
         <h1>Suivi des signalements</h1>
         <div class="stats">
           @for (x of svc.parStatut(); track x.statut) {
@@ -71,8 +71,8 @@ import { COULEURS, communeDe, SignalementService, Statut, STATUTS } from '../sig
             </app-detail>
           </aside>
         </div>
-      }
-    </div>
+      </div>
+    }
     <ng-template #rejet>
       <label>Motif de rejet</label>
       <select [ngModel]="motif()" (ngModelChange)="motif.set($event)">
@@ -91,7 +91,6 @@ export class AdminPage {
   courant = computed(() => this.svc.liste().find(r => r.id === this.choix()));
 
   async connecter() { this.erreur.set((await this.svc.connexion(this.u, this.p)) ? '' : 'Identifiants incorrects.'); }
-
   async avancer(s: Statut, note = '') {
     try { await this.svc.changer(this.choix()!, s, note); this.erreur.set(''); }
     catch (err) { this.erreur.set((err as Error).message); }

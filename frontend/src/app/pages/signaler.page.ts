@@ -12,7 +12,7 @@ import { communeDe, SignalementService, TYPES } from '../signalement.service';
       @if (code()) {
         <h1>Signalement enregistré</h1>
         <p>Votre identifiant de suivi :</p>
-        <p style="font:600 2rem Fraunces,serif;margin:4px 0">{{ code() }}</p>
+        <p class="code">{{ code() }}</p>
         <p class="mut">Conservez-le : il permet de suivre le signalement sans compte, en lecture seule.</p>
         <a routerLink="/"><button class="main">Voir la carte</button></a>
         <a routerLink="/suivre"><button style="margin-left:8px">Suivre un signalement</button></a>
