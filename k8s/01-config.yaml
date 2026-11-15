@@ -1,0 +1,25 @@
+# Variables non sensibles + secrets (équivalent du bloc "environment:" de docker-compose.yml)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: senalert-config
+  namespace: senalert
+data:
+  POSTGRES_DB: senalert
+  ADMIN_USER: admin
+  # Le navigateur appelle le site sur le NodePort 30080 (ou 8080 avec port-forward)
+  CORS_ORIGINS: "http://localhost:30080,http://localhost:8080,http://localhost:3000"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: senalert-secret
+  namespace: senalert
+type: Opaque
+stringData:
+  POSTGRES_USER: admin
+  POSTGRES_PASSWORD: admin123
+  DATABASE_URL: postgresql://admin:admin123@db-service:5432/senalert
+  ADMIN_PASSWORD: demo123
+  PGADMIN_DEFAULT_EMAIL: admin@senalert.sn
+  PGADMIN_DEFAULT_PASSWORD: admin1234

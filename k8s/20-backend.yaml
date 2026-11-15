@@ -1,0 +1,65 @@
+# API FastAPI.
+# IMPORTANT : replicas = 1. Le jeton admin est généré en mémoire à chaque démarrage
+# (ADMIN_TOKEN dans main.py) : avec 2 pods, un login sur un pod serait refusé par l'autre (401).
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service       # nginx.conf du frontend fait proxy_pass vers ce nom
+  namespace: senalert
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: senalert
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      initContainers:
+        # Attend que PostgreSQL soit prêt (équivalent de depends_on: service_healthy)
+        - name: wait-for-db
+          image: postgres:17
+          command: ["sh", "-c", "until pg_isready -h db-service -p 5432 -U admin; do echo 'attente de la base...'; sleep 2; done"]
+      containers:
+        - name: backend
+          image: senalert/backend:latest
+          imagePullPolicy: IfNotPresent   # image construite en local (voir README k8s)
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: senalert-secret, key: DATABASE_URL }
+            - name: ADMIN_USER
+              valueFrom:
+                configMapKeyRef: { name: senalert-config, key: ADMIN_USER }
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: senalert-secret, key: ADMIN_PASSWORD }
+            - name: CORS_ORIGINS
+              valueFrom:
+                configMapKeyRef: { name: senalert-config, key: CORS_ORIGINS }
+          readinessProbe:
+            httpGet: { path: /docs, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /docs, port: 8000 }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
